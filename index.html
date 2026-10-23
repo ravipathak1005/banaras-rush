@@ -1,4 +1,5 @@
-<title>Banaras Rush</title>
+
+<meta charset="utf-8"><title>Banaras Rush</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Bungee&display=swap">
 <style>
 /* Layout: full-screen 3D view, HUD around the edges (speed, objective, minimap), one start card.
@@ -98,7 +99,7 @@ button:focus-visible { outline: 3px solid var(--teal); outline-offset: 3px; }
 
   var scene = new THREE.Scene();
   var FOGC = 0xf0c890;
-  scene.fog = new THREE.FogExp2(FOGC, 0.0062);
+  scene.fog = new THREE.FogExp2(FOGC, 0.0046);
   var camera = new THREE.PerspectiveCamera(62, 1, 0.3, 900);
 
   function canvasTex(w, h, draw) {
@@ -134,9 +135,9 @@ button:focus-visible { outline: 3px solid var(--teal); outline-offset: 3px; }
   sky.renderOrder = -1;
   scene.add(sky);
 
-  scene.add(new THREE.HemisphereLight(0xfff0d0, 0x9a7a55, 1.0));
-  var sun = new THREE.DirectionalLight(0xffc888, 0.9);
-  sun.position.set(220, 70, 20);
+  scene.add(new THREE.HemisphereLight(0xfff0d0, 0xa88a62, SHADOWS ? 1.35 : 1.0));
+  var sun = new THREE.DirectionalLight(0xffd29a, SHADOWS ? 1.05 : 0.9);
+  sun.position.set(160, 150, 20);
   scene.add(sun);
   scene.add(sun.target);
   if (SHADOWS) {
@@ -152,14 +153,14 @@ button:focus-visible { outline: 3px solid var(--teal); outline-offset: 3px; }
   scene.add(ground);
 
   var roadTex = canvasTex(64, 128, function (g, w, h) {
-    g.fillStyle = '#48443f'; g.fillRect(0, 0, w, h);
+    g.fillStyle = '#625d55'; g.fillRect(0, 0, w, h);
     for (var i = 0; i < 700; i++) { g.fillStyle = 'rgba(' + (Math.random() < 0.5 ? '255,255,255' : '0,0,0') + ',' + rnd(0.03, 0.09) + ')'; g.fillRect(Math.random() * w, Math.random() * h, 2, 2); }
     g.fillStyle = '#efe6d2'; g.fillRect(w / 2 - 2, 0, 4, h * 0.4);
     g.fillStyle = 'rgba(0,0,0,0.25)'; g.fillRect(0, 0, 3, h); g.fillRect(w - 3, 0, 3, h);
   });
   roadTex.wrapS = roadTex.wrapT = THREE.RepeatWrapping;
   var roadMat = new THREE.MeshLambertMaterial({ map: roadTex });
-  var patchMat = new THREE.MeshLambertMaterial({ color: 0x48443f });
+  var patchMat = new THREE.MeshLambertMaterial({ color: 0x625d55 });
   function roadMesh(len, horizontal, cx, cz, y) {
     var g = new THREE.PlaneGeometry(RH * 2, len);
     g.rotateX(-Math.PI / 2);
@@ -398,7 +399,7 @@ button:focus-visible { outline: 3px solid var(--teal); outline-offset: 3px; }
   var dbg = document.createElement('div');
   dbg.style.cssText = 'position:fixed;left:8px;bottom:6px;z-index:9;font:11px/1.3 monospace;color:#fff;background:rgba(0,0,0,.55);padding:3px 6px;border-radius:4px;pointer-events:none;max-width:70vw';
   document.body.appendChild(dbg);
-  var BUILD = 'v2-kenney', okN = 0, failN = 0;
+  var BUILD = 'v3-light', okN = 0, failN = 0;
   function dbgUpdate() { dbg.textContent = BUILD + ' | shadows ' + (SHADOWS ? 'on' : 'off') + ' | models ok ' + okN + ' fail ' + failN + (THREE.GLTFLoader ? '' : ' | NO GLTFLoader'); }
   dbgUpdate();
   function loadModels() {
@@ -860,7 +861,7 @@ button:focus-visible { outline: 3px solid var(--teal); outline-offset: 3px; }
     // player model
     player.m.position.set(player.x, Math.abs(Math.sin(t * 22)) * 0.02 * Math.min(1, Math.abs(player.v) / 4), player.z);
     player.m.rotation.y = player.rot;
-    if (SHADOWS) { sun.target.position.set(player.x, 0, player.z); sun.position.set(player.x + 220, 70, player.z + 20); }
+    if (SHADOWS) { sun.target.position.set(player.x, 0, player.z); sun.position.set(player.x + 160, 150, player.z + 20); }
     player.m.rotation.z = -steer * Math.min(1, Math.abs(player.v) / MAXV) * 0.06;
 
     // audio
