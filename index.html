@@ -375,20 +375,25 @@ button:focus-visible { outline: 3px solid var(--teal); outline-offset: 3px; }
     g.fillText('HORN OK PLEASE', w / 2, h / 2, w - 16);
   });
   function makeAuto(lower, roof, player) {
-    var g = new THREE.Group();
+    var g = new THREE.Group(), fb = new THREE.Group();
     var lm = new THREE.MeshLambertMaterial({ color: lower }), rm = new THREE.MeshLambertMaterial({ color: roof });
-    box(g, 1.5, 0.75, 2.2, 0, 0.7, 0.35, lm);
-    box(g, 0.95, 0.65, 1.1, 0, 0.62, -1.15, lm);
-    box(g, 1.4, 0.95, 0.1, 0, 1.55, -0.55, glassMat);
-    box(g, 1.55, 0.12, 2.3, 0, 2.1, 0.45, rm);
-    [[-0.72, -0.5], [0.72, -0.5], [-0.72, 1.3], [0.72, 1.3]].forEach(function (p) { box(g, 0.08, 1.0, 0.08, p[0], 1.55, p[1], rm); });
-    box(g, 1.2, 0.3, 0.9, 0, 1.0, 0.7, new THREE.MeshLambertMaterial({ color: 0x7a2a1a }));
-    wheel(g, 0.34, 0.22, 0, 0.34, -1.55); wheel(g, 0.34, 0.26, -0.78, 0.34, 1.0); wheel(g, 0.34, 0.26, 0.78, 0.34, 1.0);
-    box(g, 1.0, 0.05, 0.05, 0, 1.2, -0.85, tyreMat);
-    var head = new THREE.Mesh(new THREE.SphereGeometry(0.14, 8, 6), new THREE.MeshBasicMaterial({ color: 0xfff2c0 })); head.position.set(0, 0.85, -1.62); g.add(head);
-    var back = new THREE.Mesh(new THREE.PlaneGeometry(1.2, 0.3), new THREE.MeshBasicMaterial({ map: backTex })); back.position.set(0, 0.95, 1.46); g.add(back);
-    if (!player) { box(g, 0.45, 0.6, 0.35, 0, 1.45, -0.1, new THREE.MeshLambertMaterial({ color: 0x8a7a55 })); var hd = new THREE.Mesh(new THREE.SphereGeometry(0.2, 8, 6), skinMat); hd.position.set(0, 1.95, -0.1); g.add(hd); }
-    else { box(g, 0.45, 0.6, 0.35, 0, 1.45, -0.1, new THREE.MeshLambertMaterial({ color: 0xc9a14a })); var hp = new THREE.Mesh(new THREE.SphereGeometry(0.2, 8, 6), skinMat); hp.position.set(0, 1.95, -0.1); g.add(hp); }
+    box(fb, 1.5, 0.75, 2.2, 0, 0.7, 0.35, lm);
+    box(fb, 0.95, 0.65, 1.1, 0, 0.62, -1.15, lm);
+    box(fb, 1.4, 0.95, 0.1, 0, 1.55, -0.55, glassMat);
+    box(fb, 1.55, 0.12, 2.3, 0, 2.1, 0.45, rm);
+    [[-0.72, -0.5], [0.72, -0.5], [-0.72, 1.3], [0.72, 1.3]].forEach(function (p) { box(fb, 0.08, 1.0, 0.08, p[0], 1.55, p[1], rm); });
+    box(fb, 1.2, 0.3, 0.9, 0, 1.0, 0.7, new THREE.MeshLambertMaterial({ color: 0x7a2a1a }));
+    wheel(fb, 0.34, 0.22, 0, 0.34, -1.55); wheel(fb, 0.34, 0.26, -0.78, 0.34, 1.0); wheel(fb, 0.34, 0.26, 0.78, 0.34, 1.0);
+    box(fb, 1.0, 0.05, 0.05, 0, 1.2, -0.85, tyreMat);
+    var head = new THREE.Mesh(new THREE.SphereGeometry(0.14, 8, 6), new THREE.MeshBasicMaterial({ color: 0xfff2c0 })); head.position.set(0, 0.85, -1.62); fb.add(head);
+    var back = new THREE.Mesh(new THREE.PlaneGeometry(1.2, 0.3), new THREE.MeshBasicMaterial({ map: backTex })); back.position.set(0, 0.95, 1.46); fb.add(back);
+    if (!player) { box(fb, 0.45, 0.6, 0.35, 0, 1.45, -0.1, new THREE.MeshLambertMaterial({ color: 0x8a7a55 })); var hd = new THREE.Mesh(new THREE.SphereGeometry(0.2, 8, 6), skinMat); hd.position.set(0, 1.95, -0.1); fb.add(hd); }
+    else { box(fb, 0.45, 0.6, 0.35, 0, 1.45, -0.1, new THREE.MeshLambertMaterial({ color: 0xc9a14a })); var hp = new THREE.Mesh(new THREE.SphereGeometry(0.2, 8, 6), skinMat); hp.position.set(0, 1.95, -0.1); fb.add(hp); }
+    g.add(fb);
+    dress(g, fb, player ? ['auto_green'] : AUTOS, null, function (grp, halfL) {
+      var sg = new THREE.Mesh(new THREE.PlaneGeometry(0.95, 0.24), new THREE.MeshBasicMaterial({ map: backTex }));
+      sg.position.set(0, 0.8, halfL + 0.02); grp.add(sg);
+    });
     addShadow(g, 2.6, 4.2);
     return g;
   }
@@ -396,15 +401,16 @@ button:focus-visible { outline: 3px solid var(--teal); outline-offset: 3px; }
   var MODELS = {}, pendingDress = [];
   var CARS = ['sedan', 'sedan-sports', 'hatchback-sports', 'suv', 'suv-luxury', 'taxi', 'van'];
   var TRUCKS = ['truck', 'truck-flat', 'delivery', 'garbage-truck'];
+  var AUTOS = ['auto_green', 'auto_blue', 'auto_black'];
   var dbg = document.createElement('div');
   dbg.style.cssText = 'position:fixed;left:8px;bottom:6px;z-index:9;font:11px/1.3 monospace;color:#fff;background:rgba(0,0,0,.55);padding:3px 6px;border-radius:4px;pointer-events:none;max-width:70vw';
   document.body.appendChild(dbg);
-  var BUILD = 'v3-light', okN = 0, failN = 0;
+  var BUILD = 'v4-auto', okN = 0, failN = 0;
   function dbgUpdate() { dbg.textContent = BUILD + ' | shadows ' + (SHADOWS ? 'on' : 'off') + ' | models ok ' + okN + ' fail ' + failN + (THREE.GLTFLoader ? '' : ' | NO GLTFLoader'); }
   dbgUpdate();
   function loadModels() {
     if (!THREE.GLTFLoader) return;
-    var ld = new THREE.GLTFLoader(), names = CARS.concat(TRUCKS);
+    var ld = new THREE.GLTFLoader(), names = CARS.concat(TRUCKS, AUTOS);
     names.forEach(function (n) {
       ld.load('assets/models/' + n + '.glb', function (gl) {
         var o = gl.scene;
@@ -412,7 +418,8 @@ button:focus-visible { outline: 3px solid var(--teal); outline-offset: 3px; }
           if (c.isMesh) {
             var mp = c.material && c.material.map;
             if (mp) { mp.encoding = THREE.sRGBEncoding; mp.magFilter = THREE.NearestFilter; mp.minFilter = THREE.NearestFilter; mp.generateMipmaps = false; }
-            c.material = new THREE.MeshLambertMaterial({ map: mp || null, color: mp ? 0xffffff : (c.material && c.material.color ? c.material.color : 0xcccccc) });
+            var hasVC = !!(c.geometry && c.geometry.attributes && c.geometry.attributes.color);
+            c.material = new THREE.MeshLambertMaterial({ map: mp || null, vertexColors: hasVC, color: (mp || hasVC) ? 0xffffff : (c.material && c.material.color ? c.material.color : 0xcccccc) });
             c.castShadow = true;
           }
         });
@@ -426,16 +433,17 @@ button:focus-visible { outline: 3px solid var(--teal); outline-offset: 3px; }
     var src = MODELS[p.name]; if (!src) return;
     var inst = src.clone(true), box3 = new THREE.Box3().setFromObject(inst), sz = new THREE.Vector3(), ctr = new THREE.Vector3();
     box3.getSize(sz); box3.getCenter(ctr);
-    var k = p.len / Math.max(sz.z, sz.x);
+    var k = p.len ? p.len / Math.max(sz.z, sz.x) : 1;
     var holder = new THREE.Group();
     inst.position.set(-ctr.x, -box3.min.y, -ctr.z);
     var inner = new THREE.Group(); inner.add(inst); inner.rotation.y = Math.PI; inner.scale.setScalar(k);
     holder.add(inner);
     p.fallback.visible = false;
     p.group.add(holder);
+    if (p.extras) p.extras(p.group, sz.z * k / 2, sz.y * k);
   }
-  function dress(group, fallback, names, len) {
-    var p = { group: group, fallback: fallback, name: pick(names), len: len };
+  function dress(group, fallback, names, len, extras) {
+    var p = { group: group, fallback: fallback, name: pick(names), len: len, extras: extras };
     if (MODELS[p.name]) attachModel(p); else pendingDress.push(p);
   }
   function makeCar(color) {
