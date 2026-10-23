@@ -135,8 +135,8 @@ button:focus-visible { outline: 3px solid var(--teal); outline-offset: 3px; }
   sky.renderOrder = -1;
   scene.add(sky);
 
-  scene.add(new THREE.HemisphereLight(0xfff0d0, 0xa88a62, SHADOWS ? 1.35 : 1.0));
-  var sun = new THREE.DirectionalLight(0xffd29a, SHADOWS ? 1.05 : 0.9);
+  scene.add(new THREE.HemisphereLight(0xfff0d0, 0xa88a62, SHADOWS ? 1.2 : 1.0));
+  var sun = new THREE.DirectionalLight(0xffd29a, SHADOWS ? 0.55 : 0.9);
   sun.position.set(160, 150, 20);
   scene.add(sun);
   scene.add(sun.target);
@@ -153,14 +153,14 @@ button:focus-visible { outline: 3px solid var(--teal); outline-offset: 3px; }
   scene.add(ground);
 
   var roadTex = canvasTex(64, 128, function (g, w, h) {
-    g.fillStyle = '#625d55'; g.fillRect(0, 0, w, h);
+    g.fillStyle = '#57534c'; g.fillRect(0, 0, w, h);
     for (var i = 0; i < 700; i++) { g.fillStyle = 'rgba(' + (Math.random() < 0.5 ? '255,255,255' : '0,0,0') + ',' + rnd(0.03, 0.09) + ')'; g.fillRect(Math.random() * w, Math.random() * h, 2, 2); }
     g.fillStyle = '#efe6d2'; g.fillRect(w / 2 - 2, 0, 4, h * 0.4);
     g.fillStyle = 'rgba(0,0,0,0.25)'; g.fillRect(0, 0, 3, h); g.fillRect(w - 3, 0, 3, h);
   });
   roadTex.wrapS = roadTex.wrapT = THREE.RepeatWrapping;
   var roadMat = new THREE.MeshLambertMaterial({ map: roadTex });
-  var patchMat = new THREE.MeshLambertMaterial({ color: 0x625d55 });
+  var patchMat = new THREE.MeshLambertMaterial({ color: 0x57534c });
   function roadMesh(len, horizontal, cx, cz, y) {
     var g = new THREE.PlaneGeometry(RH * 2, len);
     g.rotateX(-Math.PI / 2);
@@ -415,7 +415,7 @@ button:focus-visible { outline: 3px solid var(--teal); outline-offset: 3px; }
   var dbg = document.createElement('div');
   dbg.style.cssText = 'position:fixed;left:8px;bottom:6px;z-index:9;font:11px/1.3 monospace;color:#fff;background:rgba(0,0,0,.55);padding:3px 6px;border-radius:4px;pointer-events:none;max-width:70vw';
   document.body.appendChild(dbg);
-  var BUILD = 'v6-auto2', okN = 0, failN = 0;
+  var BUILD = 'v7-tone', okN = 0, failN = 0;
   function dbgUpdate() { dbg.textContent = BUILD + ' | shadows ' + (SHADOWS ? 'on' : 'off') + ' | models ok ' + okN + ' fail ' + failN + (THREE.GLTFLoader ? '' : ' | NO GLTFLoader'); }
   dbgUpdate();
   function loadModels() {
@@ -676,8 +676,13 @@ button:focus-visible { outline: 3px solid var(--teal); outline-offset: 3px; }
     { name: 'Dashashwamedh Ghat', x: 100, z: -60 }, { name: 'Assi Ghat', x: 100, z: 100 },
     { name: 'Kashi Mandir', x: -24, z: -48 }, { name: 'Ghanta Ghar Chowk', x: 0, z: 0 }
   ];
-  var beamMat = new THREE.MeshBasicMaterial({ color: 0xffa030, transparent: true, opacity: 0.35, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
-  var beam = new THREE.Mesh(new THREE.CylinderGeometry(2.2, 2.2, 40, 16, 1, true), beamMat);
+  var beamTex = canvasTex(8, 128, function (g, w, h) {
+    var gr = g.createLinearGradient(0, 0, 0, h);
+    gr.addColorStop(0, 'rgba(255,255,255,0)'); gr.addColorStop(0.55, 'rgba(255,255,255,0.35)'); gr.addColorStop(1, 'rgba(255,255,255,0.95)');
+    g.fillStyle = gr; g.fillRect(0, 0, w, h);
+  });
+  var beamMat = new THREE.MeshBasicMaterial({ map: beamTex, color: 0xff8a1a, transparent: true, opacity: 0.8, depthWrite: false, side: THREE.DoubleSide, fog: false });
+  var beam = new THREE.Mesh(new THREE.CylinderGeometry(1.3, 1.6, 40, 20, 1, true), beamMat);
   beam.position.y = 20; scene.add(beam);
   var mission = { stage: 'pickup', x: 0, z: 0, name: '', startX: 0, startZ: 0 };
   var earned = 0;
@@ -881,8 +886,8 @@ button:focus-visible { outline: 3px solid var(--teal); outline-offset: 3px; }
     }
     beam.position.set(mission.x, 20, mission.z);
     beam.visible = playing;
-    beamMat.opacity = 0.28 + 0.1 * Math.sin(t * 4);
-    beamMat.color.setHex(mission.stage === 'pickup' ? 0xffa030 : 0x40e0c0);
+    beamMat.opacity = 0.7 + 0.15 * Math.sin(t * 4);
+    beamMat.color.setHex(mission.stage === 'pickup' ? 0xff8a1a : 0x20c8b0);
 
     // river life
     for (i = 0; i < boats.length; i++) {
