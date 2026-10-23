@@ -34,3 +34,9 @@ This is a first sample. It has an old-city grid, the Kashi Mandir temple, a cloc
 ## Notes
 
 All names, models and layout are original. The project does not use assets from other games.
+
+## Assets and credits
+
+- Vehicle models in `assets/models/`: [Kenney Car Kit](https://kenney.nl) (CC0). Licence in `assets/models/KENNEY-LICENSE.txt`.
+- The game loads the models over HTTP, so open it through GitHub Pages or a local server (`python3 -m http.server`), not by double-clicking the file. If a model fails to load, the old box vehicles are used instead.
+- Shadows turn on automatically on capable devices. Force them with `?shadows=1` or `?shadows=0` at the end of the URL.
