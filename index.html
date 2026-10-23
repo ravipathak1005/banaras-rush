@@ -390,10 +390,19 @@ button:focus-visible { outline: 3px solid var(--teal); outline-offset: 3px; }
     if (!player) { box(fb, 0.45, 0.6, 0.35, 0, 1.45, -0.1, new THREE.MeshLambertMaterial({ color: 0x8a7a55 })); var hd = new THREE.Mesh(new THREE.SphereGeometry(0.2, 8, 6), skinMat); hd.position.set(0, 1.95, -0.1); fb.add(hd); }
     else { box(fb, 0.45, 0.6, 0.35, 0, 1.45, -0.1, new THREE.MeshLambertMaterial({ color: 0xc9a14a })); var hp = new THREE.Mesh(new THREE.SphereGeometry(0.2, 8, 6), skinMat); hp.position.set(0, 1.95, -0.1); fb.add(hp); }
     g.add(fb);
-    dress(g, fb, player ? ['auto_green'] : AUTOS, null, function (grp, halfL) {
+    var an, tint = null;
+    if (player) an = 'auto_user';
+    else { var r = Math.random(); if (r < 0.2) an = 'auto_green'; else if (r < 0.35) an = 'auto_blue'; else if (r < 0.45) an = 'auto_black'; else { an = 'auto_user'; tint = pick([null, null, 0x3a6ab0, 0x262626, 0xc23b2a, 0xe0b020]); } }
+    dress(g, fb, [an], null, function (grp, halfL, H, name, k) {
+      var user = name === 'auto_user';
       var sg = new THREE.Mesh(new THREE.PlaneGeometry(0.95, 0.24), new THREE.MeshBasicMaterial({ map: backTex }));
-      sg.position.set(0, 0.8, halfL + 0.02); grp.add(sg);
-    });
+      sg.position.set(0, user ? 0.5 * k : 0.8, user ? halfL - 0.1 * k : halfL + 0.02); grp.add(sg);
+      if (user) {   // seated driver (the model has none)
+        var dm = new THREE.MeshLambertMaterial({ color: player ? 0xc9a14a : 0x8a7a55 });
+        var tr = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.55, 0.28), dm); tr.position.set(0, 0.98 * k, -0.30 * k); grp.add(tr);
+        var hd2 = new THREE.Mesh(new THREE.SphereGeometry(0.16, 8, 6), skinMat); hd2.position.set(0, 1.42 * k, -0.30 * k); grp.add(hd2);
+      }
+    }, tint);
     addShadow(g, 2.6, 4.2);
     return g;
   }
@@ -401,11 +410,12 @@ button:focus-visible { outline: 3px solid var(--teal); outline-offset: 3px; }
   var MODELS = {}, pendingDress = [];
   var CARS = ['sedan', 'sedan-sports', 'hatchback-sports', 'suv', 'suv-luxury', 'taxi', 'van'];
   var TRUCKS = ['truck', 'truck-flat', 'delivery', 'garbage-truck'];
-  var AUTOS = ['auto_green', 'auto_blue', 'auto_black'];
+  var AUTOS = ['auto_green', 'auto_blue', 'auto_black', 'auto_user'];
+  var LENS = { auto_user: 2.9 };
   var dbg = document.createElement('div');
   dbg.style.cssText = 'position:fixed;left:8px;bottom:6px;z-index:9;font:11px/1.3 monospace;color:#fff;background:rgba(0,0,0,.55);padding:3px 6px;border-radius:4px;pointer-events:none;max-width:70vw';
   document.body.appendChild(dbg);
-  var BUILD = 'v5-steer', okN = 0, failN = 0;
+  var BUILD = 'v6-auto2', okN = 0, failN = 0;
   function dbgUpdate() { dbg.textContent = BUILD + ' | shadows ' + (SHADOWS ? 'on' : 'off') + ' | models ok ' + okN + ' fail ' + failN + (THREE.GLTFLoader ? '' : ' | NO GLTFLoader'); }
   dbgUpdate();
   function loadModels() {
@@ -418,9 +428,13 @@ button:focus-visible { outline: 3px solid var(--teal); outline-offset: 3px; }
           if (c.isMesh) {
             var mp = c.material && c.material.map;
             if (mp) { mp.encoding = THREE.sRGBEncoding; mp.magFilter = THREE.NearestFilter; mp.minFilter = THREE.NearestFilter; mp.generateMipmaps = false; }
-            var hasVC = !!(c.geometry && c.geometry.attributes && c.geometry.attributes.color);
-            c.material = new THREE.MeshLambertMaterial({ map: mp || null, vertexColors: hasVC, color: (mp || hasVC) ? 0xffffff : (c.material && c.material.color ? c.material.color : 0xcccccc) });
-            c.castShadow = true;
+            var hasVC = !!(c.geometry && c.geometry.attributes && c.geometry.attributes.color), om = c.material;
+            var nm = new THREE.MeshLambertMaterial({ map: mp || null, vertexColors: hasVC, color: (mp || hasVC) ? 0xffffff : (om && om.color ? om.color : 0xcccccc) });
+            nm.name = om && om.name || '';
+            if (om && om.emissive && om.emissive.getHex() > 0 && !mp) { nm.emissive = om.emissive.clone(); }
+            if (om && om.transparent) { nm.transparent = true; nm.opacity = om.opacity; nm.depthWrite = false; nm.side = THREE.DoubleSide; }
+            c.material = nm;
+            c.castShadow = !nm.transparent;
           }
         });
         MODELS[n] = o; okN++; dbgUpdate();
@@ -431,19 +445,21 @@ button:focus-visible { outline: 3px solid var(--teal); outline-offset: 3px; }
   // Wrap a loaded model: face -Z (game forward), centre it, sit on the ground, scale to the target length
   function attachModel(p) {
     var src = MODELS[p.name]; if (!src) return;
-    var inst = src.clone(true), box3 = new THREE.Box3().setFromObject(inst), sz = new THREE.Vector3(), ctr = new THREE.Vector3();
+    var inst = src.clone(true);
+    if (p.tint !== undefined && p.tint !== null) inst.traverse(function (c) { if (c.isMesh && c.material.name === 'AutoGreenBody') { c.material = c.material.clone(); c.material.color.setHex(p.tint).convertSRGBToLinear(); } });
+    var box3 = new THREE.Box3().setFromObject(inst), sz = new THREE.Vector3(), ctr = new THREE.Vector3();
     box3.getSize(sz); box3.getCenter(ctr);
-    var k = p.len ? p.len / Math.max(sz.z, sz.x) : 1;
+    var L = p.len || LENS[p.name], k = L ? L / Math.max(sz.z, sz.x) : 1;
     var holder = new THREE.Group();
     inst.position.set(-ctr.x, -box3.min.y, -ctr.z);
     var inner = new THREE.Group(); inner.add(inst); inner.rotation.y = Math.PI; inner.scale.setScalar(k);
     holder.add(inner);
     p.fallback.visible = false;
     p.group.add(holder);
-    if (p.extras) p.extras(p.group, sz.z * k / 2, sz.y * k);
+    if (p.extras) p.extras(p.group, sz.z * k / 2, sz.y * k, p.name, k);
   }
-  function dress(group, fallback, names, len, extras) {
-    var p = { group: group, fallback: fallback, name: pick(names), len: len, extras: extras };
+  function dress(group, fallback, names, len, extras, tint) {
+    var p = { group: group, fallback: fallback, name: pick(names), len: len, extras: extras, tint: tint };
     if (MODELS[p.name]) attachModel(p); else pendingDress.push(p);
   }
   function makeCar(color) {
