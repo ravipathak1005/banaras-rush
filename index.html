@@ -68,7 +68,7 @@ button:focus-visible { outline: 3px solid var(--teal); outline-offset: 3px; }
   <div class="sub">Varanasi sample</div>
   <h1>BANARAS RUSH</h1>
   <p>Drive your auto-rickshaw through the old city. Pick up passengers, drop them at the ghats, and honk your way past the cows.</p>
-  <p class="touch-only">Hold one finger to drive. Drag left or right to steer, up for speed, down to brake. Tap a second finger to honk.</p>
+  <p class="touch-only">Hold one finger to drive. Drag left or right to steer (small drifts keep you straight), up for speed, down to brake. Tap a second finger to honk.</p>
   <p class="desk-only">W / S to drive and brake, A / D to steer, Space to honk.</p>
   <button id="go" type="button">CHALO</button>
 </div>
@@ -405,7 +405,7 @@ button:focus-visible { outline: 3px solid var(--teal); outline-offset: 3px; }
   var dbg = document.createElement('div');
   dbg.style.cssText = 'position:fixed;left:8px;bottom:6px;z-index:9;font:11px/1.3 monospace;color:#fff;background:rgba(0,0,0,.55);padding:3px 6px;border-radius:4px;pointer-events:none;max-width:70vw';
   document.body.appendChild(dbg);
-  var BUILD = 'v4-auto', okN = 0, failN = 0;
+  var BUILD = 'v5-steer', okN = 0, failN = 0;
   function dbgUpdate() { dbg.textContent = BUILD + ' | shadows ' + (SHADOWS ? 'on' : 'off') + ' | models ok ' + okN + ' fail ' + failN + (THREE.GLTFLoader ? '' : ' | NO GLTFLoader'); }
   dbgUpdate();
   function loadModels() {
@@ -614,14 +614,16 @@ button:focus-visible { outline: 3px solid var(--teal); outline-offset: 3px; }
   });
   view.addEventListener('pointermove', function (e) {
     if (e.pointerId !== stick.id) return;
-    var R = ringR(), dx = e.clientX - stick.x0, dy = e.clientY - stick.y0;
-    if (dx > R * 1.5) { stick.x0 = e.clientX - R * 1.5; dx = R * 1.5; } else if (dx < -R * 1.5) { stick.x0 = e.clientX + R * 1.5; dx = -R * 1.5; }
+    var R = ringR(), SR = clamp(window.innerWidth * 0.2, 60, 110), dx = e.clientX - stick.x0, dy = e.clientY - stick.y0;
+    if (dx > SR) { stick.x0 = e.clientX - SR; dx = SR; } else if (dx < -SR) { stick.x0 = e.clientX + SR; dx = -SR; }
     if (dy > R * 1.5) { stick.y0 = e.clientY - R * 1.5; dy = R * 1.5; } else if (dy < -R * 1.5) { stick.y0 = e.clientY + R * 1.5; dy = -R * 1.5; }
-    inp.axis = Math.abs(dx) < R * 0.12 ? 0 : clamp(dx / R, -1, 1);
+    // wide dead zone + gentle curve: small finger drift = straight, big drag = hard turn
+    var nx = dx / SR, an = Math.abs(nx), DZ = 0.14;
+    inp.axis = an < DZ ? 0 : (nx < 0 ? -1 : 1) * Math.pow(Math.min(1, (an - DZ) / (1 - DZ)), 1.4);
     var up = -dy / R;
     if (up < -0.45) { inp.brake = true; inp.thr = 0; }
     else { inp.brake = false; inp.thr = clamp(0.6 + up * 0.8, 0.2, 1); }
-    placeRing(stick.x0, stick.y0, e.clientX, e.clientY);
+    placeRing(stick.x0, stick.y0, stick.x0 + dx * 48 / SR, stick.y0 + dy * 48 / (R * 1.5));
   });
   function endPtr(e) {
     if (e.pointerId === stick.id) { stick.id = null; inp.axis = 0; inp.thr = 0; inp.brake = false; ring.hidden = true; }
@@ -678,7 +680,7 @@ button:focus-visible { outline: 3px solid var(--teal); outline-offset: 3px; }
   }
 
   // ---------- game ----------
-  var MAXV = 18, shake = 0, hornCD = 0, camH = 0, t = 0, impactCD = 0, lastPlace = '';
+  var MAXV = 18, steerS = 0, shake = 0, hornCD = 0, camH = 0, t = 0, impactCD = 0, lastPlace = '';
   function start() {
     audioInit();
     state = 'play'; $('card').hidden = true;
@@ -742,8 +744,16 @@ button:focus-visible { outline: 3px solid var(--teal); outline-offset: 3px; }
       if (Math.abs(player.v) < 0.2) player.v = 0;
     }
     var steer = playing ? clamp((inp.right ? 1 : 0) - (inp.left ? 1 : 0) + inp.axis, -1, 1) : 0;
-    var yaw = steer * 1.9 * (1 - 0.4 * Math.min(1, Math.abs(player.v) / MAXV)) * clamp(Math.abs(player.v) / 3, 0, 1) * (player.v >= 0 ? 1 : -1);
+    var steerTgt = steer;
+    steerS += (steerTgt - steerS) * Math.min(1, dt * 9);   // smooth the steering input
+    steer = steerS;
+    var yaw = steer * 1.6 * (1 - 0.45 * Math.min(1, Math.abs(player.v) / MAXV)) * clamp(Math.abs(player.v) / 3, 0, 1) * (player.v >= 0 ? 1 : -1);
     player.rot -= yaw * dt;
+    // straight-line assist: with no steering input, gently align to the nearest street direction
+    if (playing && Math.abs(steerTgt) < 0.01 && player.v > 2.5) {
+      var q = Math.round(player.rot / (Math.PI / 2)) * (Math.PI / 2), dq = q - player.rot;
+      if (Math.abs(dq) < 0.4) player.rot += dq * Math.min(1, dt * 3.5);
+    }
     fx = -Math.sin(player.rot); fz = -Math.cos(player.rot);
     player.x += fx * player.v * dt; player.z += fz * player.v * dt;
     player.x = clamp(player.x, XMIN, XMAX); player.z = clamp(player.z, ZMIN, ZMAX);
