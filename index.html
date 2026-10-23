@@ -138,8 +138,8 @@ button:focus-visible { outline: 3px solid var(--teal); outline-offset: 3px; }
   sky.renderOrder = -1;
   scene.add(sky);
 
-  scene.add(new THREE.HemisphereLight(0xfff0d0, 0xa88a62, SHADOWS ? 1.2 : 1.0));
-  var sun = new THREE.DirectionalLight(0xffd29a, SHADOWS ? 0.55 : 0.9);
+  scene.add(new THREE.HemisphereLight(0xfff0d0, 0xa88a62, SHADOWS ? 1.55 : 1.0));
+  var sun = new THREE.DirectionalLight(0xffd29a, SHADOWS ? 0.4 : 0.9);
   sun.position.set(160, 150, 20);
   scene.add(sun);
   scene.add(sun.target);
@@ -399,7 +399,7 @@ button:focus-visible { outline: 3px solid var(--teal); outline-offset: 3px; }
     dress(g, fb, [an], null, function (grp, halfL, H, name, k) {
       var user = name === 'auto_user';
       var sg = new THREE.Mesh(new THREE.PlaneGeometry(0.95, 0.24), new THREE.MeshBasicMaterial({ map: backTex }));
-      sg.position.set(0, user ? 0.5 * k : 0.8, user ? halfL - 0.1 * k : halfL + 0.02); grp.add(sg);
+      sg.position.set(0, user ? 0.64 * k : 0.8, user ? halfL - 0.03 * k : halfL + 0.02); grp.add(sg);
       if (user) {   // seated driver (the model has none)
         var dm = new THREE.MeshLambertMaterial({ color: player ? 0xc9a14a : 0x8a7a55 });
         var tr = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.55, 0.28), dm); tr.position.set(0, 0.98 * k, -0.30 * k); grp.add(tr);
@@ -422,7 +422,7 @@ button:focus-visible { outline: 3px solid var(--teal); outline-offset: 3px; }
   var dbg = document.createElement('div');
   dbg.style.cssText = 'position:fixed;left:8px;bottom:6px;z-index:9;font:11px/1.3 monospace;color:#fff;background:rgba(0,0,0,.55);padding:3px 6px;border-radius:4px;pointer-events:none;max-width:70vw';
   document.body.appendChild(dbg);
-  var BUILD = 'v8-people', okN = 0, failN = 0;
+  var BUILD = 'v9-fix', okN = 0, failN = 0;
   function dbgUpdate() { dbg.textContent = BUILD + ' | shadows ' + (SHADOWS ? 'on' : 'off') + ' | models ok ' + okN + ' fail ' + failN + (THREE.GLTFLoader ? '' : ' | NO GLTFLoader') + dbgExtra; }
   dbgUpdate();
   function prepModel(o) {
@@ -504,9 +504,9 @@ button:focus-visible { outline: 3px solid var(--teal); outline-offset: 3px; }
       im.instanceMatrix.needsUpdate = true; im.frustumCulled = false; im.castShadow = SHADOWS; im.receiveShadow = SHADOWS;
       scene.add(im);
     });
-    propCount += plan.list.length; dbgExtra = ' | props ' + propCount + ' | people ' + pedCount; dbgUpdate();
+    propCount += plan.list.length; dbgExtra = ' | props ' + propCount + ' | people ' + pedCount + dbgAnim; dbgUpdate();
   }
-  var propCount = 0, pedCount = 0, peds = [];
+  var propCount = 0, pedCount = 0, peds = [], dbgAnim = '';
   // ---------- pedestrians (Kenney animated character, FBX) ----------
   function loadPeople() {
     if (!THREE.FBXLoader || !THREE.SkeletonUtils) { dbgExtra += ' | no FBX'; dbgUpdate(); return; }
@@ -515,7 +515,19 @@ button:focus-visible { outline: 3px solid var(--teal); outline-offset: 3px; }
     fl.load(base + 'characterMedium.fbx', function (obj) {
       fl.load(base + 'run.fbx', function (an) {
         try {
-          var clip = an.animations && an.animations[0];
+          var clip = an.animations && an.animations[0], bones = {}, matched = 0, total = 0;
+          obj.traverse(function (o) { if (o.name) bones[o.name] = true; });
+          if (clip) clip.tracks.forEach(function (tr) {
+            total++;
+            var dot = tr.name.lastIndexOf('.'), node = tr.name.slice(0, dot), prop = tr.name.slice(dot);
+            if (!bones[node]) {
+              var alt = node.split('|').pop().split(':').pop();
+              if (bones[alt]) { tr.name = alt + prop; node = alt; }
+              else { var lc = alt.toLowerCase(); for (var bn in bones) { if (bn.toLowerCase() === lc || bn.toLowerCase().replace(/^.*[|:]/, '') === lc) { tr.name = bn + prop; node = bn; break; } } }
+            }
+            if (bones[node]) matched++;
+          });
+          dbgAnim = ' | anim ' + matched + '/' + total;
           var bb = new THREE.Box3().setFromObject(obj), H = bb.max.y - bb.min.y, sc = H > 0 ? 1.7 / H : 1;
           var mats = texes.map(function (t) { return new THREE.MeshLambertMaterial({ map: t, skinning: true }); });
           var shirts = [0xffffff, 0xe8c8a0, 0xc23b2a, 0x3a6ab0, 0x2f7a3a, 0xe0b020];
@@ -528,7 +540,7 @@ button:focus-visible { outline: 3px solid var(--teal); outline-offset: 3px; }
             var vert = Math.random() < 0.5, rc = vert ? pick(XS) : pick(ZS), sd = Math.random() < 0.5 ? 1 : -1;
             peds.push({ holder: holder, mixer: mixer, vert: vert, rc: rc, off: sd * (RH + 1.7), s: rnd(-120, vert ? 120 : 80), dir: Math.random() < 0.5 ? 1 : -1, sp: rnd(1.0, 1.5) });
           }
-          pedCount = peds.length; dbgExtra = ' | props ' + propCount + ' | people ' + pedCount; dbgUpdate();
+          pedCount = peds.length; dbgExtra = ' | props ' + propCount + ' | people ' + pedCount + dbgAnim; dbgUpdate();
         } catch (e) { dbgExtra += ' | people err'; dbgUpdate(); if (window.console) console.warn(e); }
       }, undefined, function () { dbgExtra += ' | run.fbx fail'; dbgUpdate(); });
     }, undefined, function () { dbgExtra += ' | people fail'; dbgUpdate(); });
