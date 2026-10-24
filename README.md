@@ -53,3 +53,6 @@ All names, models and layout are original. The project does not use assets from 
 ## Sound
 
 All audio is synthesised in the browser (Web Audio), so there is nothing to download: put-put auto engine that follows speed, road and tyre noise, horns for every vehicle type (louder and panned by distance), cow moos, pickup chime and cash sound, city ambience (temple bells, birds, distant horns) and a soft sitar/tabla/tanpura background loop. The round button under the minimap cycles music + effects, effects only, and off (remembered between visits).
+
+## School campus
+`assets/models/school_campus.glb` is the Hyderabad Chhatwara school campus model (V14), converted by `tools/make_campus.py` (Z-up to Y-up, parts merged per material, origin at the gate). It stands on the block at x −90..−54, z 24..42, with the gate facing the z=48 road. Walls, rooms and tree trunks are solid; the courtyard is open. It is also a mission drop-off.

@@ -255,6 +255,7 @@ button:focus-visible { outline: 3px solid var(--teal); outline-offset: 3px; }
       if (special === 'temple') continue;
       for (var ci = 0; ci < 2; ci++) for (var cj = 0; cj < 2; cj++) {
         if (special === 'tower' && ci === 0 && cj === 0) continue;
+        if (bi === 1 && bj === 3 && cj === 1) continue; // school campus goes here
         if (Math.random() < 0.07) continue;
         var x0 = xmin + ci * (cw + GAP), z0 = zmin + cj * (cd + GAP);
         var ins = rnd(0, 1.2), w = cw - ins - rnd(0, 0.8), d = cd - ins - rnd(0, 0.8);
@@ -274,6 +275,7 @@ button:focus-visible { outline: 3px solid var(--teal); outline-offset: 3px; }
   var landmarks = [
     { name: 'Kashi Mandir', x: -24, z: -24, r: 42 },
     { name: 'Ghanta Ghar Chowk', x: 9, z: 9, r: 36 },
+    { name: 'Hyderabad Chhatwara School', x: -72, z: 33, r: 24 },
     { name: 'Dashashwamedh Ghat', x: 104, z: -60, r: 50 },
     { name: 'Assi Ghat', x: 104, z: 100, r: 50 }
   ];
@@ -423,7 +425,7 @@ button:focus-visible { outline: 3px solid var(--teal); outline-offset: 3px; }
   var dbg = document.createElement('div');
   dbg.style.cssText = 'position:fixed;left:8px;bottom:6px;z-index:9;font:11px/1.3 monospace;color:#fff;background:rgba(0,0,0,.55);padding:3px 6px;border-radius:4px;pointer-events:none;max-width:70vw';
   document.body.appendChild(dbg);
-  var BUILD = 'v13-sound', okN = 0, failN = 0, loadMsg = '';
+  var BUILD = 'v14-school', okN = 0, failN = 0, loadMsg = '';
   function dbgUpdate() { dbg.textContent = BUILD + ' | shadows ' + (SHADOWS ? 'on' : 'off') + ' | models ok ' + okN + ' fail ' + failN + (THREE.GLTFLoader ? '' : ' | NO GLTFLoader') + dbgExtra + loadMsg; }
   dbgUpdate();
   function prepModel(o) {
@@ -470,6 +472,7 @@ button:focus-visible { outline: 3px solid var(--teal); outline-offset: 3px; }
         prepModel(gl.scene); PROPS[n] = gl.scene; okN++; dbgUpdate(); placeProps(n);
       }, undefined, function (err) { failN++; dbgUpdate(); if (window.console) console.warn('prop failed', n, err); });
     });
+    loadCampus();
     loadPeople();
     TRUCKS.forEach(function (n) {
       ld.load('assets/models/' + n + '.glb', function (gl) {
@@ -531,6 +534,27 @@ button:focus-visible { outline: 3px solid var(--teal); outline-offset: 3px; }
   }
   var propCount = 0, pedCount = 0, peds = [];
   // ---------- pedestrians: low-poly people built from 5 parts (body, 2 legs, 2 arms) that swing as they walk ----------
+  // ---------- school campus (Ravi's model): walls, rooms and gate; the courtyard is open to drive into ----------
+  var CAMPUS_X = -90, CAMPUS_Z = 42; // campus corner (model x=0,y=0) = gate side, block 1,3
+  function campusCol(x0, x1, y0, y1) { addCollider(CAMPUS_X + x0, CAMPUS_X + x1, CAMPUS_Z - y1, CAMPUS_Z - y0); }
+  campusCol(0, 36, 17.7, 18); campusCol(0, 0.3, 0, 18); campusCol(35.7, 36, 0, 18);
+  campusCol(0, 20.8, 0, 0.3); campusCol(26.6, 36, 0, 0.3); campusCol(20.8, 21.2, -0.2, 0.4); campusCol(26.1, 26.6, -0.2, 0.4);
+  campusCol(1, 35, 11.2, 16.4); campusCol(1, 14.4, 3.5, 8.8); campusCol(27, 32.8, 8.4, 12.4); campusCol(32.5, 35.8, 6.1, 9.4); campusCol(26.6, 33.5, 0.2, 3.4);
+  campusCol(15.2, 16.4, 6.4, 7.3); campusCol(31.3, 32.1, 5.9, 6.6); campusCol(5.5, 6.2, 1.5, 2.2); campusCol(18.7, 19.8, 1.6, 2.9); // tree trunks
+  function loadCampus() {
+    ldq('assets/models/school_campus.glb', function (gl) {
+      var o = gl.scene;
+      prepModel(o);
+      o.traverse(function (c) {
+        if (!c.isMesh) return;
+        var mp = c.material.map;
+        if (mp) { mp.magFilter = THREE.LinearFilter; mp.minFilter = THREE.LinearMipmapLinearFilter; mp.generateMipmaps = true; mp.anisotropy = 4; mp.needsUpdate = true; }
+        c.receiveShadow = true;
+      });
+      o.position.set(CAMPUS_X + 23.7, 0, CAMPUS_Z);
+      scene.add(o); okN++; dbgUpdate();
+    }, function () { failN++; dbgUpdate(); });
+  }
   function loadPeople() {
     var ld = { load: ldq }, srcs = [], left = 6;
     for (var v = 0; v < 6; v++) (function (v) {
@@ -971,7 +995,7 @@ button:focus-visible { outline: 3px solid var(--teal); outline-offset: 3px; }
   // ---------- mission ----------
   var DROPS = [
     { name: 'Dashashwamedh Ghat', x: 100, z: -60 }, { name: 'Assi Ghat', x: 100, z: 100 },
-    { name: 'Kashi Mandir', x: -24, z: -48 }, { name: 'Ghanta Ghar Chowk', x: 0, z: 0 }
+    { name: 'Kashi Mandir', x: -24, z: -48 }, { name: 'Hyderabad Chhatwara School', x: -66, z: 47 }, { name: 'Ghanta Ghar Chowk', x: 0, z: 0 }
   ];
   var beamTex = canvasTex(8, 128, function (g, w, h) {
     var gr = g.createLinearGradient(0, 0, 0, h);
