@@ -49,3 +49,7 @@ All names, models and layout are original. The project does not use assets from 
 ## Generating models with Python
 
 `tools/glbkit.py` is a small numpy-only toolkit that builds low-poly models and writes `.glb` files. `tools/make_auto.py` uses it to build the auto-rickshaws (`assets/models/auto_*.glb`). Run `python3 tools/make_auto.py preview.png` to also write a preview image (needs matplotlib).
+
+## Sound
+
+All audio is synthesised in the browser (Web Audio), so there is nothing to download: put-put auto engine that follows speed, road and tyre noise, horns for every vehicle type (louder and panned by distance), cow moos, pickup chime and cash sound, city ambience (temple bells, birds, distant horns) and a soft sitar/tabla/tanpura background loop. The round button under the minimap cycles music + effects, effects only, and off (remembered between visits).

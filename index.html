@@ -27,6 +27,7 @@ canvas#c { display: block; width: 100%; height: 100%; }
 .tl b { font-size: 24px; line-height: 1.1; color: var(--marigold); }
 .tc { position: absolute; top: calc(12px + env(safe-area-inset-top, 0px)); left: 50%; transform: translateX(-50%); max-width: 46vw; text-align: center; display: flex; flex-direction: column; gap: 3px; }
 .tc .obj { font-family: var(--font-display); font-size: clamp(13px, 3.4vw, 20px); line-height: 1.15; text-shadow: 0 2px 0 rgba(0, 0, 0, 0.6); }
+.snd { position: absolute; top: calc(146px + env(safe-area-inset-top, 0px)); right: calc(14px + env(safe-area-inset-right, 0px)); width: 40px; height: 40px; border-radius: 50%; border: 0; background: rgba(0,0,0,.38); color: #fff; font-size: 19px; line-height: 40px; padding: 0; pointer-events: auto; cursor: pointer; touch-action: manipulation; }
 .tr { position: absolute; top: calc(12px + env(safe-area-inset-top, 0px)); right: calc(14px + env(safe-area-inset-right, 0px)); }
 #mini { display: block; width: 112px; height: 124px; border: 2px solid rgba(255, 244, 224, 0.7); border-radius: 10px; background: #c4a878; }
 .bl { position: absolute; bottom: calc(14px + env(safe-area-inset-bottom, 0px)); left: calc(14px + env(safe-area-inset-left, 0px)); display: flex; align-items: baseline; gap: 8px; }
@@ -58,6 +59,7 @@ button:focus-visible { outline: 3px solid var(--teal); outline-offset: 3px; }
   <div class="tl"><span class="lbl">Earned</span><b id="fare">₹0</b></div>
   <div class="tc"><span class="obj" id="obj">Find a passenger</span></div>
   <div class="tr"><canvas id="mini" width="112" height="124"></canvas></div>
+  <button class="snd" id="snd" type="button" aria-label="Sound">&#128266;</button>
   <div class="bl"><b id="speed">0</b><span class="lbl">km/h</span></div>
   <div class="place" id="place">Old City</div>
   <div class="popup" id="popup"></div>
@@ -421,7 +423,7 @@ button:focus-visible { outline: 3px solid var(--teal); outline-offset: 3px; }
   var dbg = document.createElement('div');
   dbg.style.cssText = 'position:fixed;left:8px;bottom:6px;z-index:9;font:11px/1.3 monospace;color:#fff;background:rgba(0,0,0,.55);padding:3px 6px;border-radius:4px;pointer-events:none;max-width:70vw';
   document.body.appendChild(dbg);
-  var BUILD = 'v12-load', okN = 0, failN = 0, loadMsg = '';
+  var BUILD = 'v13-sound', okN = 0, failN = 0, loadMsg = '';
   function dbgUpdate() { dbg.textContent = BUILD + ' | shadows ' + (SHADOWS ? 'on' : 'off') + ' | models ok ' + okN + ' fail ' + failN + (THREE.GLTFLoader ? '' : ' | NO GLTFLoader') + dbgExtra + loadMsg; }
   dbgUpdate();
   function prepModel(o) {
@@ -699,39 +701,198 @@ button:focus-visible { outline: 3px solid var(--teal); outline-offset: 3px; }
   }
 
   // ---------- audio ----------
-  var A = { ctx: null };
-  var muted = false;
+  // ---------- audio: everything is synthesised in the browser, nothing to download ----------
+  var A = { ctx: null }, muted = false, snd = 0;      // snd: 0 = music + effects, 1 = effects only, 2 = off
+  try { var svd = localStorage.getItem('br-snd'); if (svd !== null) snd = clamp(parseInt(svd, 10) || 0, 0, 2); } catch (e) {}
+  muted = snd === 2;
+  function applySnd() {
+    muted = snd === 2;
+    if (A.ctx) { A.master.gain.value = muted ? 0 : 0.9; A.mus.gain.value = snd === 0 ? 0.8 : 0; }
+    var b = $('snd'); if (b) b.textContent = ['🔊', '🔉', '🔇'][snd];
+    try { localStorage.setItem('br-snd', String(snd)); } catch (e) {}
+  }
+  function noiseBuf(c) { var n = c.sampleRate * 2, b = c.createBuffer(1, n, c.sampleRate), d = b.getChannelData(0); for (var i = 0; i < n; i++) d[i] = Math.random() * 2 - 1; return b; }
+  function noiseLoop(c) { var s = c.createBufferSource(); s.buffer = A.noise; s.loop = true; s.start(); return s; }
+  function gainNode(c, v, to) { var g = c.createGain(); g.gain.value = v; if (to) g.connect(to); return g; }
+  function filt(c, type, f, q) { var b = c.createBiquadFilter(); b.type = type; b.frequency.value = f; if (q) b.Q.value = q; return b; }
+  function panOut(pan, dest) {   // returns a node to connect to; applies stereo pan when supported
+    var c = A.ctx;
+    if (c.createStereoPanner) { var p = c.createStereoPanner(); p.pan.value = clamp(pan, -1, 1); p.connect(dest); return p; }
+    return dest;
+  }
   function audioInit() {
     if (A.ctx) { try { if (A.ctx.state === 'suspended') A.ctx.resume(); } catch (e) {} return; }
     try {
       var AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
       var c = new AC(); A.ctx = c;
-      A.master = c.createGain(); A.master.gain.value = 0.9; A.master.connect(c.destination);
-      A.eng = c.createOscillator(); A.eng.type = 'sawtooth';
-      A.engF = c.createBiquadFilter(); A.engF.type = 'lowpass'; A.engF.frequency.value = 420;
-      A.engG = c.createGain(); A.engG.gain.value = 0;
-      A.eng.connect(A.engF); A.engF.connect(A.engG); A.engG.connect(A.master); A.eng.start();
+      A.master = gainNode(c, 0.9, c.destination); A.sfx = gainNode(c, 1, A.master); A.amb = gainNode(c, 1, A.master); A.mus = gainNode(c, 0.8, A.master);
+      A.noise = noiseBuf(c);
+      // engine: a sawtooth + sub square, chopped by a sawtooth LFO at the "firing rate" = put-put-put
+      A.e1 = c.createOscillator(); A.e1.type = 'sawtooth'; A.e1.frequency.value = 60;
+      A.e2 = c.createOscillator(); A.e2.type = 'square'; A.e2.frequency.value = 30;
+      A.ef = filt(c, 'lowpass', 260, 1); A.pulse = gainNode(c, 0.5); A.eg = gainNode(c, 0, A.sfx);
+      var e2g = gainNode(c, 0.45, A.ef);
+      A.e1.connect(A.ef); A.e2.connect(e2g); A.ef.connect(A.pulse); A.pulse.connect(A.eg);
+      A.lfo = c.createOscillator(); A.lfo.type = 'sawtooth'; A.lfo.frequency.value = 7;
+      var lfoD = gainNode(c, 0.5, A.pulse.gain); A.lfo.connect(lfoD);
+      A.e1.start(); A.e2.start(); A.lfo.start();
+      // road rumble and tyre squeal
+      A.roadG = gainNode(c, 0, A.sfx); noiseLoop(c).connect(filt(c, 'bandpass', 420, 0.6)).connect(A.roadG);
+      A.skidG = gainNode(c, 0, A.sfx); noiseLoop(c).connect(filt(c, 'bandpass', 2300, 6)).connect(A.skidG);
+      // crowd murmur bed that slowly swells
+      var mg = gainNode(c, 0.03, A.amb); noiseLoop(c).connect(filt(c, 'lowpass', 650)).connect(mg);
+      var sw = c.createOscillator(); sw.frequency.value = 0.09; var swd = gainNode(c, 0.012, mg.gain); sw.connect(swd); sw.start();
+      A.nextT = c.currentTime + 0.2; A.step = 0; A.mel = { rest: 3, left: 0, hold: 0, deg: 3 };
+      A.nextBell = c.currentTime + 5; A.nextBird = c.currentTime + 2; A.nextFar = c.currentTime + 3;
+      A.tick = setInterval(audioTick, 110);
+      applySnd();
+      document.addEventListener('visibilitychange', function () {
+        try { if (document.hidden) c.suspend(); else if (!muted) c.resume(); } catch (e) {}
+      });
     } catch (e) { A.ctx = null; }
   }
-  function honkSound(vol) {
+  function panFor(x, z) {
+    var dx = x - player.x, dz = z - player.z, d = Math.hypot(dx, dz) || 1, fx = -Math.sin(player.rot), fz = -Math.cos(player.rot);
+    return { d: d, pan: clamp((dx * -fz + dz * fx) / d, -1, 1) };
+  }
+  // one sustained horn: freqs[] square waves
+  function hornTone(fs, t0, dur, vol, pan, lp, dest) {
+    var c = A.ctx, out = panOut(pan, dest || A.sfx);
+    fs.forEach(function (f) {
+      var o = c.createOscillator(), g = c.createGain(), lf = filt(c, 'lowpass', lp || 2400);
+      o.type = 'square'; o.frequency.value = f;
+      g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(vol, t0 + 0.02); g.gain.setValueAtTime(vol, t0 + dur - 0.05); g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+      o.connect(lf); lf.connect(g); g.connect(out); o.start(t0); o.stop(t0 + dur + 0.05);
+    });
+  }
+  function honkSound(vol) {      // the player's auto: two quick beeps
+    if (!A.ctx || muted) return;
+    try { var t = A.ctx.currentTime, v = vol || 0.06; hornTone([400, 500], t, 0.13, v, 0, 2200); hornTone([400, 500], t + 0.18, 0.22, v, 0, 2200); } catch (e) {}
+  }
+  var HORNS = { car: { f: [410, 520], d: 0.3 }, auto: { f: [380, 480], d: 0.22 }, bike: { f: [760], d: 0.14 }, bus: { f: [190, 240, 285], d: 0.6 } };
+  function vehHorn(kind, x, z, boost) {   // another vehicle's horn, louder when closer, panned left/right
+    if (!A.ctx || muted) return;
+    try {
+      var p = panFor(x, z), g = Math.pow(clamp(1 - p.d / 55, 0, 1), 1.6) * 0.07 * (boost || 1);
+      if (g < 0.002) return;
+      var h = HORNS[kind] || HORNS.car, t = A.ctx.currentTime;
+      hornTone(h.f, t, h.d, g, p.pan, 1800 + 1200 * clamp(1 - p.d / 55, 0, 1));
+      if (kind === 'bike' || kind === 'auto') hornTone(h.f, t + h.d + 0.1, h.d, g, p.pan, 2000);
+    } catch (e) {}
+  }
+  function noiseBurst(t, dur, f, q, vol, dest) {
+    var c = A.ctx, s = c.createBufferSource(); s.buffer = A.noise;
+    var g = c.createGain(); g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    s.connect(filt(c, 'bandpass', f, q)).connect(g); g.connect(dest || A.sfx); s.start(t, Math.random()); s.stop(t + dur + 0.05);
+  }
+  function thudSound() {
+    if (!A.ctx || muted) return;
+    try {
+      var c = A.ctx, t = c.currentTime, o = c.createOscillator(), g = c.createGain();
+      o.type = 'sine'; o.frequency.setValueAtTime(130, t); o.frequency.exponentialRampToValueAtTime(38, t + 0.22);
+      g.gain.setValueAtTime(0.28, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.28);
+      o.connect(g); g.connect(A.sfx); o.start(t); o.stop(t + 0.32);
+      noiseBurst(t, 0.16, 520, 0.8, 0.22);
+      var k = c.createOscillator(), kg = c.createGain(); k.type = 'square'; k.frequency.setValueAtTime(310, t); k.frequency.exponentialRampToValueAtTime(180, t + 0.08);
+      kg.gain.setValueAtTime(0.03, t); kg.gain.exponentialRampToValueAtTime(0.0001, t + 0.1); k.connect(kg); kg.connect(A.sfx); k.start(t); k.stop(t + 0.12);
+    } catch (e) {}
+  }
+  function mooSound(x, z) {
+    if (!A.ctx || muted) return;
+    try {
+      var c = A.ctx, t = c.currentTime, p = panFor(x, z), vol = 0.1 * Math.pow(clamp(1 - p.d / 45, 0, 1), 1.3);
+      if (vol < 0.004) return;
+      var o = c.createOscillator(), o2 = c.createOscillator(), bp = filt(c, 'bandpass', 500, 3), g = c.createGain(), v = c.createOscillator(), vg = c.createGain();
+      o.type = 'sawtooth'; o2.type = 'sawtooth'; o.frequency.setValueAtTime(112, t); o.frequency.linearRampToValueAtTime(128, t + 0.35); o.frequency.linearRampToValueAtTime(96, t + 1.15);
+      o2.frequency.setValueAtTime(113.6, t); o2.frequency.linearRampToValueAtTime(129.5, t + 0.35); o2.frequency.linearRampToValueAtTime(97, t + 1.15);
+      bp.frequency.setValueAtTime(420, t); bp.frequency.linearRampToValueAtTime(820, t + 0.4); bp.frequency.linearRampToValueAtTime(480, t + 1.15);
+      v.frequency.value = 5.5; vg.gain.value = 3; v.connect(vg); vg.connect(o.frequency);
+      g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + 0.18); g.gain.setValueAtTime(vol, t + 0.8); g.gain.exponentialRampToValueAtTime(0.0001, t + 1.25);
+      o.connect(bp); o2.connect(bp); bp.connect(g); g.connect(panOut(p.pan, A.sfx));
+      o.start(t); o2.start(t); v.start(t); o.stop(t + 1.3); o2.stop(t + 1.3); v.stop(t + 1.3);
+    } catch (e) {}
+  }
+  function bellTone(f, t, dur, vol, pan, dest) {
+    var c = A.ctx, out = panOut(pan, dest || A.sfx);
+    [[1, 0.5], [2.0, 0.3], [2.76, 0.22], [5.4, 0.1]].forEach(function (pt) {
+      var o = c.createOscillator(), g = c.createGain(); o.type = 'sine'; o.frequency.value = f * pt[0];
+      g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol * pt[1], t + 0.008); g.gain.exponentialRampToValueAtTime(0.0001, t + dur / (0.6 + pt[0] * 0.25));
+      o.connect(g); g.connect(out); o.start(t); o.stop(t + dur + 0.1);
+    });
+  }
+  function chimeSound() { if (!A.ctx || muted) return; try { var t = A.ctx.currentTime; bellTone(880, t, 0.7, 0.06, 0); bellTone(1175, t + 0.13, 0.7, 0.06, 0); bellTone(1568, t + 0.26, 1.0, 0.07, 0); } catch (e) {} }
+  function cashSound() {
     if (!A.ctx || muted) return;
     try {
       var c = A.ctx, t = c.currentTime;
-      [410, 520].forEach(function (f) {
-        var o = c.createOscillator(), g = c.createGain();
-        o.type = 'square'; o.frequency.value = f;
-        g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol || 0.06, t + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.38);
-        o.connect(g); g.connect(A.master); o.start(t); o.stop(t + 0.4);
+      noiseBurst(t, 0.05, 3500, 2, 0.12);
+      [2093, 2794, 3322].forEach(function (f, i) {
+        var o = c.createOscillator(), g = c.createGain(); o.type = 'triangle'; o.frequency.value = f;
+        g.gain.setValueAtTime(0.0001, t + 0.06 + i * 0.07); g.gain.exponentialRampToValueAtTime(0.05, t + 0.07 + i * 0.07); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.5 + i * 0.07);
+        o.connect(g); g.connect(A.sfx); o.start(t + 0.06 + i * 0.07); o.stop(t + 0.7 + i * 0.07);
       });
     } catch (e) {}
   }
-  function thudSound() {
-    if (!A.ctx) return;
+  // ---------- music: tanpura drone, tabla loop and a sitar-like melody on a pentatonic raga scale ----------
+  var SA = 146.83, BHUP = [1, 9 / 8, 5 / 4, 3 / 2, 5 / 3];
+  function pluck(f, t, dur, vol, bright, dest, bend) {
+    var c = A.ctx, o = c.createOscillator(), o2 = c.createOscillator(), lp = filt(c, 'lowpass', f * bright, 0.7), g = c.createGain();
+    o.type = 'sawtooth'; o2.type = 'triangle';
+    o.frequency.setValueAtTime(f * (1 + (bend || 0)), t); o.frequency.exponentialRampToValueAtTime(f, t + 0.07); o2.frequency.value = f * 2.003;
+    lp.frequency.setValueAtTime(f * bright, t); lp.frequency.exponentialRampToValueAtTime(f * 1.4, t + dur * 0.8);
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + 0.006); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    var g2 = gainNode(c, 0.25); o2.connect(g2); g2.connect(lp); o.connect(lp); lp.connect(g); g.connect(dest);
+    o.start(t); o2.start(t); o.stop(t + dur + 0.05); o2.stop(t + dur + 0.05);
+  }
+  function tabla(t, kind) {
+    var c = A.ctx, o = c.createOscillator(), g = c.createGain(); o.type = 'sine';
+    if (kind === 'B') { o.frequency.setValueAtTime(120, t); o.frequency.exponentialRampToValueAtTime(68, t + 0.22); g.gain.setValueAtTime(0.07, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.3); noiseBurst(t, 0.03, 900, 1, 0.03, A.mus); }
+    else { o.frequency.setValueAtTime(560, t); o.frequency.exponentialRampToValueAtTime(400, t + 0.09); g.gain.setValueAtTime(kind === 'n' ? 0.03 : 0.016, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.12); noiseBurst(t, 0.02, 3000, 1, 0.015, A.mus); }
+    o.connect(g); g.connect(A.mus); o.start(t); o.stop(t + 0.35);
+  }
+  var TABLA = 'B.n.n.Bn';
+  function musicStep(t, k) {
+    if (snd !== 0) return;
+    if (k % 4 === 0) { var f = SA * [0.75, 1, 1, 0.5][(k / 4) % 4]; pluck(f, t, 2.6, 0.045, 3.2, A.mus, 0); pluck(f * 1.004, t + 0.012, 2.6, 0.03, 2.6, A.mus, 0); }
+    var tk = TABLA.charAt(k % 16 >> 1); if ((k % 2) === 0 && tk !== '.') tabla(t, tk);
+    else if ((k % 2) === 1 && (k % 16) === 7) tabla(t, 'x');
+    var m = A.mel;
+    if (m.rest > 0) { m.rest--; if (m.rest === 0) m.left = 4 + Math.floor(Math.random() * 5); return; }
+    if (m.hold > 0) { m.hold--; return; }
+    m.deg = clamp(m.deg + pick([-2, -1, -1, 0, 1, 1, 2]), 0, 10);
+    var fr = SA * 2 * BHUP[m.deg % 5] * Math.pow(2, Math.floor(m.deg / 5));
+    pluck(fr, t, 1.3, 0.05, 5, A.mus, 0.03);
+    m.hold = Math.random() < 0.4 ? 1 : 0; m.left--; if (m.left <= 0) m.rest = 5 + Math.floor(Math.random() * 6);
+  }
+  function audioTick() {
+    var c = A.ctx; if (!c || c.state !== 'running' || muted) return;
+    var now = c.currentTime;
+    if (A.nextT < now) A.nextT = now + 0.05;
+    while (A.nextT < now + 0.3) { musicStep(A.nextT, A.step++); A.nextT += 0.3; }
+    if (now > A.nextBell) { bellTone(pick([440, 523, 392]), now + 0.05, 3.2, 0.028, rnd(-0.8, 0.8), A.amb); A.nextBell = now + rnd(9, 18); }
+    if (now > A.nextBird) {
+      var pn = rnd(-1, 1), n = 2 + Math.floor(Math.random() * 3);
+      for (var i = 0; i < n; i++) {
+        var o = c.createOscillator(), g = c.createGain(), t0 = now + 0.05 + i * 0.13, f0 = rnd(2600, 3400);
+        o.type = 'sine'; o.frequency.setValueAtTime(f0, t0); o.frequency.exponentialRampToValueAtTime(f0 * 1.35, t0 + 0.07);
+        g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(0.012, t0 + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.09);
+        o.connect(g); g.connect(panOut(pn, A.amb)); o.start(t0); o.stop(t0 + 0.12);
+      }
+      A.nextBird = now + rnd(2.5, 6);
+    }
+    if (now > A.nextFar) { var h = HORNS[pick(['car', 'bike', 'bus', 'auto'])]; hornTone(h.f, now + 0.05, h.d, 0.012, rnd(-1, 1), 900, A.amb); A.nextFar = now + rnd(3, 8); }
+  }
+  function audioUpdate(playing, thr, brake, steer) {
+    var c = A.ctx; if (!c || muted) return;
     try {
-      var c = A.ctx, o = c.createOscillator(), g = c.createGain(), t = c.currentTime;
-      o.type = 'sine'; o.frequency.setValueAtTime(120, t); o.frequency.exponentialRampToValueAtTime(40, t + 0.2);
-      g.gain.setValueAtTime(0.2, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.25);
-      o.connect(g); g.connect(A.master); o.start(t); o.stop(t + 0.3);
+      var tt = c.currentTime, sp = Math.abs(player.v), on = playing ? 1 : 0;
+      A.lfo.frequency.setTargetAtTime(6 + sp * 0.85, tt, 0.08);
+      A.e1.frequency.setTargetAtTime(58 + sp * 3.4, tt, 0.08);
+      A.e2.frequency.setTargetAtTime(29 + sp * 1.7, tt, 0.08);
+      A.ef.frequency.setTargetAtTime(240 + sp * 28, tt, 0.1);
+      A.eg.gain.setTargetAtTime(on * (0.06 + thr * 0.04), tt, 0.1);
+      A.roadG.gain.setTargetAtTime(on * Math.min(1, sp / 18) * 0.05, tt, 0.15);
+      A.skidG.gain.setTargetAtTime(playing && ((brake && sp > 7) || (Math.abs(steer) > 0.75 && sp > 12)) ? 0.035 : 0, tt, 0.05);
     } catch (e) {}
   }
 
@@ -837,7 +998,7 @@ button:focus-visible { outline: 3px solid var(--teal); outline-offset: 3px; }
   }
 
   // ---------- game ----------
-  var MAXV = 18, steerS = 0, shake = 0, hornCD = 0, camH = 0, t = 0, impactCD = 0, lastPlace = '';
+  var MAXV = 18, mooCD = 0, steerS = 0, shake = 0, hornCD = 0, camH = 0, t = 0, impactCD = 0, lastPlace = '';
   function start() {
     audioInit();
     state = 'play'; $('card').hidden = true;
@@ -848,6 +1009,12 @@ button:focus-visible { outline: 3px solid var(--teal); outline-offset: 3px; }
     setTimeout(function () { hintEl.style.opacity = 0; }, 6000);
   }
   $('go').addEventListener('click', start);
+  $('snd').addEventListener('click', function (e) {
+    e.stopPropagation(); snd = (snd + 1) % 3; audioInit(); applySnd();
+    if (A.ctx && !muted) { try { A.ctx.resume(); } catch (x) {} }
+    pop(['Sound: music + effects', 'Sound: effects only', 'Sound: off'][snd]);
+  });
+  applySnd();
 
   function pushOut(r) {
     var hit = null;
@@ -924,10 +1091,12 @@ button:focus-visible { outline: 3px solid var(--teal); outline-offset: 3px; }
     }
 
     // horn
-    hornCD = Math.max(0, hornCD - dt);
+    hornCD = Math.max(0, hornCD - dt); mooCD = Math.max(0, mooCD - dt);
     if (playing && inp.horn && hornCD <= 0) {
       hornCD = 0.45; honkSound(0.06);
-      cows.forEach(function (c) { if (Math.hypot(c.x - player.x, c.z - player.z) < 24) c.tlat = (c.lat >= 0 ? 1 : -1) * 4.2; });
+      var nearCow = null, ncd = 24;
+      cows.forEach(function (c) { var dc = Math.hypot(c.x - player.x, c.z - player.z); if (dc < 24) { c.tlat = (c.lat >= 0 ? 1 : -1) * 4.2; if (dc < ncd) { ncd = dc; nearCow = c; } } });
+      if (nearCow && mooCD <= 0) { var nc = nearCow; mooCD = 3.5; setTimeout(function () { mooSound(nc.x, nc.z); }, 350); }
     }
 
     // obstacle list for traffic
@@ -945,7 +1114,7 @@ button:focus-visible { outline: 3px solid var(--teal); outline-offset: 3px; }
       if (Math.hypot(c.x - player.x, c.z - player.z) < 1.9 && playing) {
         var cdx = player.x - c.x, cdz = player.z - c.z, cd = Math.hypot(cdx, cdz) || 1;
         player.x += cdx / cd * 0.6; player.z += cdz / cd * 0.6; player.v *= 0.6;
-        if (impactCD <= 0) { shake = 0.6; impactCD = 0.5; thudSound(); pop('MOO!', 'bad'); }
+        if (impactCD <= 0) { shake = 0.6; impactCD = 0.5; thudSound(); mooSound(c.x, c.z); pop('MOO!', 'bad'); }
       }
     }
 
@@ -964,6 +1133,8 @@ button:focus-visible { outline: 3px solid var(--teal); outline-offset: 3px; }
         }
       }
       if (blocked && v.stun <= 0) { v.blockT += dt; if (v.blockT > 4) { v.ghost = 3; v.blockT = 0; } } else if (!blocked) v.blockT = 0;
+      v.hornCD = (v.hornCD || rnd(0, 3)) - dt;
+      if (blocked && v.blockT > 0.8 && v.hornCD <= 0 && playing) { vehHorn(v.kind, v.x, v.z); v.hornCD = rnd(3, 7); }
       v.v += ((blocked ? 0 : v.base) - v.v) * Math.min(1, dt * (blocked ? 5 : 1.2));
       var px0 = v.x, pz0 = v.z;
       v.x += v.dx * v.v * dt; v.z += v.dz * v.v * dt;
@@ -999,7 +1170,7 @@ button:focus-visible { outline: 3px solid var(--teal); outline-offset: 3px; }
           v.x -= nx * pen * 0.35; v.z -= nz * pen * 0.35;
           if (impactCD <= 0) {
             impactCD = 0.5; shake = Math.min(1, 0.4 + Math.abs(player.v) / 16); thudSound();
-            v.stun = 1.2; honkSound(0.04); pop('BUMP!', 'bad');
+            v.stun = 1.2; vehHorn(v.kind, v.x, v.z, 1.5); pop('BUMP!', 'bad');
           }
           player.v *= 1 - Math.min(1, dt * 10);
         }
@@ -1010,13 +1181,13 @@ button:focus-visible { outline: 3px solid var(--teal); outline-offset: 3px; }
     if (playing) {
       var dm = Math.hypot(player.x - mission.x, player.z - mission.z);
       if (mission.stage === 'pickup' && dm < 6 && Math.abs(player.v) < 10) {
-        pop('PASSENGER ABOARD');
+        pop('PASSENGER ABOARD'); chimeSound();
         newDrop();
       } else if (mission.stage === 'drop' && dm < 7 && Math.abs(player.v) < 10) {
         var dist = Math.hypot(mission.x - mission.startX, mission.z - mission.startZ);
         var fare = Math.round((40 + dist * 0.35) / 5) * 5;
         earned += fare; pop('+₹' + fare + '  SHUKRIYA!');
-        honkSound(0.05);
+        cashSound();
         newPickup();
       }
     }
@@ -1041,13 +1212,7 @@ button:focus-visible { outline: 3px solid var(--teal); outline-offset: 3px; }
     player.m.rotation.z = -steer * Math.min(1, Math.abs(player.v) / MAXV) * 0.06;
 
     // audio
-    if (A.ctx) {
-      try {
-        var tt = A.ctx.currentTime;
-        A.eng.frequency.setTargetAtTime(44 + Math.abs(player.v) * 4.2, tt, 0.06);
-        A.engG.gain.setTargetAtTime(playing && !muted ? 0.035 + thr * 0.03 : 0, tt, 0.1);
-      } catch (e) {}
-    }
+    audioUpdate(playing, thr, brake, steer);
 
     // camera
     camH = angleLerp(camH, player.rot, Math.min(1, dt * 3.2));
