@@ -413,14 +413,15 @@ button:focus-visible { outline: 3px solid var(--teal); outline-offset: 3px; }
   var TRUCKS = ['truck', 'truck-flat', 'delivery', 'garbage-truck'];
   var AUTOS = ['auto_green', 'auto_blue', 'auto_black', 'auto_user'];
   var BIKES = ['moto', 'scooter'];
+  var COWS = ['cow_0', 'cow_1', 'cow_2', 'cow_3'];
   var ROADP = ['electricity-pole-single', 'light-curved', 'dumpster'];
   var PROPS = {}, dbgExtra = '';
-  var LENS = { auto_user: 2.9, moto: 2.1, scooter: 1.75 };
+  var LENS = { auto_user: 2.9, moto: 2.1, scooter: 1.75, cow_0: 2.2, cow_1: 2.2, cow_2: 2.2, cow_3: 2.2 };
   var TINTABLE = ['AutoGreenBody', 'ClassicRoyalMaroon', 'ChetakVintageSkyBlue'];
   var dbg = document.createElement('div');
   dbg.style.cssText = 'position:fixed;left:8px;bottom:6px;z-index:9;font:11px/1.3 monospace;color:#fff;background:rgba(0,0,0,.55);padding:3px 6px;border-radius:4px;pointer-events:none;max-width:70vw';
   document.body.appendChild(dbg);
-  var BUILD = 'v10-peds', okN = 0, failN = 0;
+  var BUILD = 'v11-cows', okN = 0, failN = 0;
   function dbgUpdate() { dbg.textContent = BUILD + ' | shadows ' + (SHADOWS ? 'on' : 'off') + ' | models ok ' + okN + ' fail ' + failN + (THREE.GLTFLoader ? '' : ' | NO GLTFLoader') + dbgExtra; }
   dbgUpdate();
   function prepModel(o) {
@@ -440,7 +441,7 @@ button:focus-visible { outline: 3px solid var(--teal); outline-offset: 3px; }
   function loadModels() {
     if (!THREE.GLTFLoader) return;
     var ld = new THREE.GLTFLoader();
-    CARS.concat(TRUCKS, AUTOS, BIKES).forEach(function (n) {
+    CARS.concat(TRUCKS, AUTOS, BIKES, COWS).forEach(function (n) {
       ld.load('assets/models/' + n + '.glb', function (gl) {
         prepModel(gl.scene);
         MODELS[n] = gl.scene; okN++; dbgUpdate();
@@ -607,17 +608,18 @@ button:focus-visible { outline: 3px solid var(--teal); outline-offset: 3px; }
     return g;
   }
   function makeCow() {
-    var g = new THREE.Group(), cm = new THREE.MeshLambertMaterial({ color: pick([0xf0e8d8, 0xd8c8a8, 0xb89870]) });
-    box(g, 0.75, 0.8, 1.6, 0, 1.0, 0, cm);
-    box(g, 0.4, 0.45, 0.55, 0, 1.3, -1.0, cm);
-    box(g, 0.1, 0.1, 0.1, -0.2, 1.65, -1.0, tyreMat); box(g, 0.1, 0.1, 0.1, 0.2, 1.65, -1.0, tyreMat);
-    [[-0.25, -0.6], [0.25, -0.6], [-0.25, 0.6], [0.25, 0.6]].forEach(function (p) { box(g, 0.14, 0.7, 0.14, p[0], 0.35, p[1], cm); });
-    box(g, 0.06, 0.6, 0.06, 0, 1.0, 0.85, cm);
-    addShadow(g, 1.4, 2.4);
+    var g = new THREE.Group(), fb = new THREE.Group(), cm = new THREE.MeshLambertMaterial({ color: pick([0xf0e8d8, 0xd8c8a8, 0xb89870]) });
+    box(fb, 0.75, 0.8, 1.6, 0, 1.0, 0, cm);
+    box(fb, 0.4, 0.45, 0.55, 0, 1.3, -1.0, cm);
+    box(fb, 0.1, 0.1, 0.1, -0.2, 1.65, -1.0, tyreMat); box(fb, 0.1, 0.1, 0.1, 0.2, 1.65, -1.0, tyreMat);
+    [[-0.25, -0.6], [0.25, -0.6], [-0.25, 0.6], [0.25, 0.6]].forEach(function (p) { box(fb, 0.14, 0.7, 0.14, p[0], 0.35, p[1], cm); });
+    box(fb, 0.06, 0.6, 0.06, 0, 1.0, 0.85, cm);
+    g.add(fb);
+    dress(g, fb, COWS, null, null);
+    addShadow(g, 1.4, 2.6);
     return g;
   }
 
-  loadModels();
   var player = { x: 0, z: 56, rot: 0, v: 0, m: makeAuto(0x2f7a3a, 0xf2c230, true) };
   scene.add(player.m);
 
