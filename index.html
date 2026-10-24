@@ -38,8 +38,8 @@ canvas#c { display: block; width: 100%; height: 100%; }
 .popup.bad { color: #ff6a4a; }
 .popup.show { animation: pop 1.3s ease-out forwards; }
 @keyframes pop { 0% { opacity: 0; transform: translateY(10px) scale(0.85); } 12% { opacity: 1; transform: scale(1.06); } 80% { opacity: 1; } 100% { opacity: 0; transform: translateY(-18px); } }
-.ring { position: fixed; left: 0; top: 0; width: 112px; height: 112px; border: 2px solid rgba(255, 244, 224, 0.4); border-radius: 50%; pointer-events: none; z-index: 5; }
-.ring i { position: absolute; left: 50%; top: 50%; width: 46px; height: 46px; margin: -23px 0 0 -23px; border-radius: 50%; background: rgba(255, 244, 224, 0.4); border: 2px solid rgba(255, 244, 224, 0.75); }
+.ring { position: fixed; left: 0; top: 0; width: 168px; height: 168px; border: 2px solid rgba(255, 244, 224, 0.4); border-radius: 50%; pointer-events: none; z-index: 5; }
+.ring i { position: absolute; left: 50%; top: 50%; width: 64px; height: 64px; margin: -32px 0 0 -32px; border-radius: 50%; background: rgba(255, 244, 224, 0.4); border: 2px solid rgba(255, 244, 224, 0.75); }
 .card { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 24px; text-align: center; background: rgba(29, 15, 6, 0.6); }
 .card[hidden] { display: none !important; }
 .card h1 { margin: 0; font-family: var(--font-display); font-weight: 400; font-size: clamp(34px, 10vw, 72px); letter-spacing: 0.03em; line-height: 1; color: var(--marigold); text-shadow: 0 4px 0 rgba(0, 0, 0, 0.5); }
@@ -425,7 +425,7 @@ button:focus-visible { outline: 3px solid var(--teal); outline-offset: 3px; }
   var dbg = document.createElement('div');
   dbg.style.cssText = 'position:fixed;left:8px;bottom:6px;z-index:9;font:11px/1.3 monospace;color:#fff;background:rgba(0,0,0,.55);padding:3px 6px;border-radius:4px;pointer-events:none;max-width:70vw';
   document.body.appendChild(dbg);
-  var BUILD = 'v14-school', okN = 0, failN = 0, loadMsg = '';
+  var BUILD = 'v15-controls', okN = 0, failN = 0, loadMsg = '';
   function dbgUpdate() { dbg.textContent = BUILD + ' | shadows ' + (SHADOWS ? 'on' : 'off') + ' | models ok ' + okN + ' fail ' + failN + (THREE.GLTFLoader ? '' : ' | NO GLTFLoader') + dbgExtra + loadMsg; }
   dbgUpdate();
   function prepModel(o) {
@@ -933,10 +933,10 @@ button:focus-visible { outline: 3px solid var(--teal); outline-offset: 3px; }
 
   var view = $('view'), ring = $('ring'), ringDot = $('ringDot');
   var stick = { id: null, x0: 0, y0: 0 }, hornPtrs = {};
-  function ringR() { return clamp(window.innerWidth * 0.13, 36, 64); }
+  function ringR() { return clamp(Math.min(window.innerWidth, window.innerHeight * 1.4) * 0.2, 56, 96); }
   function placeRing(cx, cy, fx, fy) {
-    ring.style.transform = 'translate(' + (cx - 56) + 'px,' + (cy - 56) + 'px)';
-    var dx = fx - cx, dy = fy - cy, m = Math.sqrt(dx * dx + dy * dy), lim = 48;
+    ring.style.transform = 'translate(' + (cx - 84) + 'px,' + (cy - 84) + 'px)';
+    var dx = fx - cx, dy = fy - cy, m = Math.sqrt(dx * dx + dy * dy), lim = 70;
     if (m > lim) { dx = dx / m * lim; dy = dy / m * lim; }
     ringDot.style.transform = 'translate(' + dx + 'px,' + dy + 'px)';
   }
@@ -951,16 +951,17 @@ button:focus-visible { outline: 3px solid var(--teal); outline-offset: 3px; }
   });
   view.addEventListener('pointermove', function (e) {
     if (e.pointerId !== stick.id) return;
-    var R = ringR(), SR = clamp(window.innerWidth * 0.2, 60, 110), dx = e.clientX - stick.x0, dy = e.clientY - stick.y0;
+    var R = ringR(), SR = clamp(window.innerWidth * 0.26, 90, 150), dx = e.clientX - stick.x0, dy = e.clientY - stick.y0;
     if (dx > SR) { stick.x0 = e.clientX - SR; dx = SR; } else if (dx < -SR) { stick.x0 = e.clientX + SR; dx = -SR; }
     if (dy > R * 1.5) { stick.y0 = e.clientY - R * 1.5; dy = R * 1.5; } else if (dy < -R * 1.5) { stick.y0 = e.clientY + R * 1.5; dy = -R * 1.5; }
     // wide dead zone + gentle curve: small finger drift = straight, big drag = hard turn
     var nx = dx / SR, an = Math.abs(nx), DZ = 0.14;
     inp.axis = an < DZ ? 0 : (nx < 0 ? -1 : 1) * Math.pow(Math.min(1, (an - DZ) / (1 - DZ)), 1.4);
-    var up = -dy / R;
-    if (up < -0.45) { inp.brake = true; inp.thr = 0; }
-    else { inp.brake = false; inp.thr = clamp(0.6 + up * 0.8, 0.2, 1); }
-    placeRing(stick.x0, stick.y0, stick.x0 + dx * 48 / SR, stick.y0 + dy * 48 / (R * 1.5));
+    // brake/reverse only on a deliberate, mostly-straight pull down; a thumb that curls down while turning keeps driving
+    var up = -dy / R, turning = an > 0.45;
+    if (inp.brake ? (up < -0.8 && !turning) || up < -1.1 : (up < -1.25 && an < 0.3)) { inp.brake = true; inp.thr = 0; }
+    else { inp.brake = false; inp.thr = clamp(0.6 + Math.max(up, -0.4) * 0.8, 0.3, 1); }
+    placeRing(stick.x0, stick.y0, stick.x0 + dx * 70 / SR, stick.y0 + dy * 70 / (R * 1.5));
   });
   function endPtr(e) {
     if (e.pointerId === stick.id) { stick.id = null; inp.axis = 0; inp.thr = 0; inp.brake = false; ring.hidden = true; }
