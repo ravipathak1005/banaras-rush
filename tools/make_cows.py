@@ -5,7 +5,7 @@ import numpy as np
 sys.path.insert(0, os.path.dirname(__file__))
 from ped_lib import read_parts
 from glbkit import hex2lin, Mesh
-from glbparts import flat, write_glb
+from glbparts import welded as flat, write_glb
 
 SRC = sys.argv[1]; PREV = sys.argv[2] if len(sys.argv) > 2 else None
 OUT = os.path.join(os.path.dirname(__file__), '..', 'assets', 'models'); os.makedirs(OUT, exist_ok=True)
@@ -54,5 +54,5 @@ for k, v in enumerate(VARIANTS):
     print(p, os.path.getsize(p) // 1024, 'KB', len(g[0][2][3]) // 3, 'tris')
     if PREV and k == 2:
         m = Mesh(); pos, nrm, col, idx = g[0][2]
-        m.P.append(pos.astype(float)); m.N.append(nrm.astype(float)); m.C.append(col.astype(float)); m.I.append(idx.astype(np.int64)); m.n = len(pos)
+        m.P.append(pos.astype(float)); m.N.append(np.zeros((len(pos), 3))); m.C.append(col.astype(float)); m.I.append(idx.astype(np.int64)); m.n = len(pos)
         m.preview(PREV, views=((15, 150), (10, 60), (0, 90)), size=4.5)
