@@ -56,3 +56,6 @@ All audio is synthesised in the browser (Web Audio), so there is nothing to down
 
 ## School campus
 `assets/models/school_campus.glb` is the Hyderabad Chhatwara school campus model (V14), converted by `tools/make_campus.py` (Z-up to Y-up, parts merged per material, origin at the gate). It stands on the block at x −90..−54, z 24..42, with the gate facing the z=48 road. Walls, rooms and tree trunks are solid; the courtyard is open. It is also a mission drop-off.
+
+## House compound
+`assets/models/house_compound.glb` is Ravi's compound model (V28), converted by `tools/make_compound.py` (scaled 0.65, origin at the gate, grass pad clipped to its block). It stands at the east edge of block x 54..96, z −90..−54, gate facing the x=96 road. The compound is solid (closed gate) and is a mission drop-off.
